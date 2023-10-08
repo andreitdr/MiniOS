@@ -14,4 +14,6 @@ wget https://github.com/open-watcom/open-watcom-v2/releases/download/Current-bui
 sudo chmod +x ./open-watcom-2_0-c-linux-x64
 sudo ./open-watcom-2_0-c-linux-x64
 rm ./open-watcom-2_0-c-linux-x64
+rm -fr ./Downloads
 
+sudo apt install gcc
