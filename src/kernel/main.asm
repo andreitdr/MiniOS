@@ -1,11 +1,12 @@
-org 0x0                 ; BIOS loads boot sector to 0x7C00
-bits 16                 ; 16 bit code
+org 0x0
+bits 16
 
-; New line macro
-%define ENDL 0x0D, 0x0A  
 
-; Boot sector code goes here
+%define ENDL 0x0D, 0x0A
+
+
 start:
+    ; print hello world message
     mov si, msg_hello
     call puts
 
@@ -14,32 +15,31 @@ start:
     hlt
 
 ;
-;   Print a string to the screen
-;   Parameters:
-;       ds:si - pointer to the string
+; Prints a string to the screen
+; Params:
+;   - ds:si points to string
 ;
 puts:
-    push si         ; Save si
-    push ax         ; Save ax
-    puah bx         
+    ; save registers we will modify
+    push si
+    push ax
+    push bx
 
 .loop:
-    lodsb           ; Load next byte dl:si into al register and increment si
-    or al, al       ; Check if al is 0 (end of string). Does not change the value of al but sets 
-                    ; the flags according to the result
+    lodsb               ; loads next character in al
+    or al, al           ; verify if next character is null?
+    jz .done
 
-    jz .done        ; If al is 0, we're done
+    mov ah, 0x0E        ; call bios interrupt
+    mov bh, 0           ; set page number to 0
+    int 0x10
 
-    mov ah, 0x0E    ; BIOS teletype function
-    mov bh, 0       ; Page number
-    int 0x10        ; Call BIOS
-
-    jmp .loop        ; And repeat
+    jmp .loop
 
 .done:
     pop bx
-    pop ax          ; Restore ax
-    pop si          ; Restore si
-    ret             ; Return to the caller
+    pop ax
+    pop si    
+    ret
 
-msg_hello: db 'Hello World!', ENDL, 0
+msg_hello: db 'Hello world from KERNEL!', ENDL, 0
