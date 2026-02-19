@@ -200,6 +200,10 @@ int ui_handle_mouse(UIContext *ctx, const MouseState *mouse, int clicked) {
         return 0;
     }
     
+    debug_puts("ui_handle_mouse: clicked=");
+    debug_puthex(clicked);
+    debug_puts("\r\n");
+    
     w = ctx->root;
     
     /* Update hover states and handle clicks */
@@ -207,10 +211,31 @@ int ui_handle_mouse(UIContext *ctx, const MouseState *mouse, int clicked) {
         if (w->visible && w->type == WIDGET_BUTTON) {
             w->hovered = point_in_widget(w, mouse->x, mouse->y);
             
-            if (clicked && w->hovered && w->on_click) {
-                w->on_click(w, w->user_data);
-                handled = 1;
-                break; /* Only handle one click at a time */
+            if (clicked && w->hovered) {
+                debug_puts("Button clicked at x=");
+                debug_puthex(w->x);
+                debug_puts(" y=");
+                debug_puthex(w->y);
+                debug_puts(" callback=");
+                debug_puthex((uint32_t)w->on_click);
+                debug_puts("\r\n");
+                
+                if (w->on_click) {
+                    /* Adjust function pointer: kernel loaded at 0x20000 but linked at 0x0 */
+                    WidgetCallback actual_callback = w->on_click;
+                    if ((uint32_t)actual_callback < 0x20000) {
+                        actual_callback = (WidgetCallback)((uint32_t)actual_callback + 0x20000);
+                        debug_puts("Adjusted callback to: ");
+                        debug_puthex((uint32_t)actual_callback);
+                        debug_puts("\r\n");
+                    }
+                    
+                    debug_puts("Calling callback...\r\n");
+                    actual_callback(w, w->user_data);
+                    debug_puts("Callback returned\r\n");
+                    handled = 1;
+                    break; /* Only handle one click at a time */
+                }
             }
         }
         w = w->next;

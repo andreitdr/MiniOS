@@ -41,10 +41,22 @@ static void on_info_clicked(Widget *widget, void *user_data) {
     debug_puts("\r\n");
 }
 
+static void shutdown(void) {
+    // Try ACPI shutdown (QEMU)
+    __asm__ volatile ("outw %0, %1" : : "a"((uint16_t)0x2000), "Nd"((uint16_t)0x604));
+    
+    // If ACPI doesn't work, try older method
+    __asm__ volatile ("outw %0, %1" : : "a"((uint16_t)0x2000), "Nd"((uint16_t)0xB004));
+    
+    // If nothing works, halt
+    __asm__ volatile ("cli; hlt");
+}
+
 static void on_halt_clicked(Widget *widget, void *user_data) {
     (void)widget;
     (void)user_data;
-    __asm__ volatile ("cli; hlt");
+    debug_log("Shutdown button clicked");
+    shutdown();
 }
 
 void kmain(struct BootInfo *info) {
