@@ -6,7 +6,8 @@
 struct BootInfo;
 
 typedef struct {
-    uint32_t *addr;
+    uint32_t *addr;          /* Visible framebuffer */
+    uint32_t *back_buffer;   /* Off-screen buffer for double buffering */
     uint16_t width;
     uint16_t height;
     uint16_t pitch;
@@ -15,6 +16,8 @@ typedef struct {
 } Framebuffer;
 
 void fb_init(Framebuffer *fb, const struct BootInfo *info);
+void fb_enable_double_buffer(Framebuffer *fb, uint32_t *buffer);
+void fb_swap(Framebuffer *fb);
 void fb_clear(Framebuffer *fb, uint32_t color);
 void fb_draw_rect(Framebuffer *fb, int x, int y, int w, int h, uint32_t color);
 void fb_draw_char(Framebuffer *fb, int x, int y, char c, uint32_t color);

@@ -122,44 +122,24 @@ void ui_render_widget(Widget *widget, Framebuffer *fb) {
     
     switch (widget->type) {
         case WIDGET_BUTTON: {
-            debug_puts("Rendering button at ");
-            debug_puthex((uint32_t)widget->x);
-            debug_puts(",");
-            debug_puthex((uint32_t)widget->y);
-            debug_puts("\r\n");
-            
             uint32_t color = widget->hovered ? widget->hover_color : widget->bg_color;
             fb_draw_rect(fb, widget->x, widget->y, widget->width, widget->height, color);
             
             if (widget->text) {
-                debug_puts("Button text ptr: ");
-                debug_puthex((uint32_t)widget->text);
-                debug_puts("\r\n");
                 int text_x = widget->x + 8;
                 int text_y = widget->y + ((widget->height - 8) / 2);
                 fb_draw_text(fb, text_x, text_y, widget->text, widget->fg_color);
-                debug_puts("Button text rendered\r\n");
             }
             break;
         }
         
         case WIDGET_LABEL:
-            debug_puts("Rendering label at ");
-            debug_puthex((uint32_t)widget->x);
-            debug_puts(",");
-            debug_puthex((uint32_t)widget->y);
-            debug_puts("\r\n");
             if (widget->text) {
-                debug_puts("Label text ptr: ");
-                debug_puthex((uint32_t)widget->text);
-                debug_puts("\r\n");
                 fb_draw_text(fb, widget->x, widget->y, widget->text, widget->fg_color);
-                debug_puts("Label text rendered\r\n");
             }
             break;
         
         case WIDGET_PANEL:
-            debug_puts("Rendering panel\r\n");
             fb_draw_rect(fb, widget->x, widget->y, widget->width, widget->height, widget->bg_color);
             break;
     }
@@ -200,10 +180,6 @@ int ui_handle_mouse(UIContext *ctx, const MouseState *mouse, int clicked) {
         return 0;
     }
     
-    debug_puts("ui_handle_mouse: clicked=");
-    debug_puthex(clicked);
-    debug_puts("\r\n");
-    
     w = ctx->root;
     
     /* Update hover states and handle clicks */
@@ -212,27 +188,14 @@ int ui_handle_mouse(UIContext *ctx, const MouseState *mouse, int clicked) {
             w->hovered = point_in_widget(w, mouse->x, mouse->y);
             
             if (clicked && w->hovered) {
-                debug_puts("Button clicked at x=");
-                debug_puthex(w->x);
-                debug_puts(" y=");
-                debug_puthex(w->y);
-                debug_puts(" callback=");
-                debug_puthex((uint32_t)w->on_click);
-                debug_puts("\r\n");
-                
                 if (w->on_click) {
                     /* Adjust function pointer: kernel loaded at 0x20000 but linked at 0x0 */
                     WidgetCallback actual_callback = w->on_click;
                     if ((uint32_t)actual_callback < 0x20000) {
                         actual_callback = (WidgetCallback)((uint32_t)actual_callback + 0x20000);
-                        debug_puts("Adjusted callback to: ");
-                        debug_puthex((uint32_t)actual_callback);
-                        debug_puts("\r\n");
                     }
                     
-                    debug_puts("Calling callback...\r\n");
                     actual_callback(w, w->user_data);
-                    debug_puts("Callback returned\r\n");
                     handled = 1;
                     break; /* Only handle one click at a time */
                 }

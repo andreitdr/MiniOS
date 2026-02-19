@@ -1,9 +1,11 @@
+#include <stddef.h>
 #include "bootinfo.h"
 #include "framebuffer.h"
 #include "font8x8.h"
 
 void fb_init(Framebuffer *fb, const struct BootInfo *info) {
     fb->addr = (uint32_t *)(uintptr_t)info->lfb;
+    fb->back_buffer = NULL;  /* No double buffering by default */
     fb->width = info->width;
     fb->height = info->height;
     fb->pitch = info->pitch;
@@ -11,11 +13,35 @@ void fb_init(Framebuffer *fb, const struct BootInfo *info) {
     fb->font = (const uint8_t *)(uintptr_t)info->font_ptr;
 }
 
+void fb_enable_double_buffer(Framebuffer *fb, uint32_t *buffer) {
+    fb->back_buffer = buffer;
+}
+
+void fb_swap(Framebuffer *fb) {
+    uint16_t y;
+    
+    if (!fb->back_buffer) {
+        return;  /* No double buffering enabled */
+    }
+    
+    /* Copy back buffer to visible framebuffer */
+    for (y = 0; y < fb->height; ++y) {
+        uint32_t *dst = (uint32_t *)((uint8_t *)fb->addr + (y * fb->pitch));
+        uint32_t *src = (uint32_t *)((uint8_t *)fb->back_buffer + (y * fb->pitch));
+        uint16_t x;
+        
+        for (x = 0; x < fb->width; ++x) {
+            dst[x] = src[x];
+        }
+    }
+}
+
 void fb_clear(Framebuffer *fb, uint32_t color) {
     uint16_t y;
+    uint32_t *target = fb->back_buffer ? fb->back_buffer : fb->addr;
 
     for (y = 0; y < fb->height; ++y) {
-        uint32_t *row = (uint32_t *)((uint8_t *)fb->addr + (y * fb->pitch));
+        uint32_t *row = (uint32_t *)((uint8_t *)target + (y * fb->pitch));
         uint16_t x;
 
         for (x = 0; x < fb->width; ++x) {
@@ -26,6 +52,7 @@ void fb_clear(Framebuffer *fb, uint32_t color) {
 
 void fb_draw_rect(Framebuffer *fb, int x, int y, int w, int h, uint32_t color) {
     int yy;
+    uint32_t *target = fb->back_buffer ? fb->back_buffer : fb->addr;
 
     if (x < 0) {
         w += x;
@@ -46,7 +73,7 @@ void fb_draw_rect(Framebuffer *fb, int x, int y, int w, int h, uint32_t color) {
     }
 
     for (yy = 0; yy < h; ++yy) {
-        uint32_t *row = (uint32_t *)((uint8_t *)fb->addr + ((y + yy) * fb->pitch));
+        uint32_t *row = (uint32_t *)((uint8_t *)target + ((y + yy) * fb->pitch));
         int xx;
 
         for (xx = 0; xx < w; ++xx) {
@@ -59,6 +86,7 @@ void fb_draw_char(Framebuffer *fb, int x, int y, char c, uint32_t color) {
     const uint8_t *glyph;
     int row, col;
     unsigned char uc = (unsigned char)c;
+    uint32_t *target = fb->back_buffer ? fb->back_buffer : fb->addr;
     
     /* Use embedded font (ASCII 32-127) */
     if (uc < 32 || uc > 127) {
@@ -73,7 +101,7 @@ void fb_draw_char(Framebuffer *fb, int x, int y, char c, uint32_t color) {
         int py = y + row;
         
         if (py >= 0 && py < fb->height) {
-            uint32_t *dst = (uint32_t *)((uint8_t *)fb->addr + (py * fb->pitch));
+            uint32_t *dst = (uint32_t *)((uint8_t *)target + (py * fb->pitch));
             
             for (col = 0; col < 8; col++) {
                 int px = x + col;

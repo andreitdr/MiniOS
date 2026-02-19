@@ -2,6 +2,8 @@
 
 #define COM1_PORT 0x3F8
 
+static LogLevel current_log_level = LOG_INFO;
+
 static inline void outb(uint16_t port, uint8_t value) {
     __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
 }
@@ -23,6 +25,10 @@ void debug_init(void) {
     outb(COM1_PORT + 4, 0x0B);    /* Enable interrupts, RTS/DSR set */
     
     debug_puts("Debug initialized\r\n");
+}
+
+void debug_set_level(LogLevel level) {
+    current_log_level = level;
 }
 
 static int is_transmit_empty(void) {
@@ -61,6 +67,30 @@ void debug_puthex(uint32_t value) {
 
 void debug_log(const char *msg) {
     debug_puts("[DEBUG] ");
+    debug_puts(msg);
+    debug_puts("\r\n");
+}
+
+void debug_log_level(LogLevel level, const char *msg) {
+    if (level < current_log_level) {
+        return;
+    }
+    
+    switch (level) {
+        case LOG_DEBUG:
+            debug_puts("[DEBUG] ");
+            break;
+        case LOG_INFO:
+            debug_puts("[INFO]  ");
+            break;
+        case LOG_WARN:
+            debug_puts("[WARN]  ");
+            break;
+        case LOG_ERROR:
+            debug_puts("[ERROR] ");
+            break;
+    }
+    
     debug_puts(msg);
     debug_puts("\r\n");
 }

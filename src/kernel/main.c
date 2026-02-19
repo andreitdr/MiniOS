@@ -12,6 +12,11 @@
 static Framebuffer g_fb;
 static int show_info = 0;
 
+/* Back buffer for double buffering - allocate at fixed address 0x200000 (2MB)
+ * This is after kernel space and safe to use */
+#define BACK_BUFFER_ADDR 0x200000
+static uint32_t *back_buffer = (uint32_t *)BACK_BUFFER_ADDR;
+
 static void clamp_mouse(MouseState *mouse, const Framebuffer *fb) {
     if (mouse->x < 0) {
         mouse->x = 0;
@@ -31,14 +36,7 @@ static void clamp_mouse(MouseState *mouse, const Framebuffer *fb) {
 static void on_info_clicked(Widget *widget, void *user_data) {
     (void)widget;
     (void)user_data;
-    debug_log("Info button clicked");
-    debug_puts("show_info was: ");
-    debug_puthex(show_info);
-    debug_puts("\r\n");
     show_info = !show_info;
-    debug_puts("show_info now: ");
-    debug_puthex(show_info);
-    debug_puts("\r\n");
 }
 
 static void shutdown(void) {
@@ -55,7 +53,6 @@ static void shutdown(void) {
 static void on_halt_clicked(Widget *widget, void *user_data) {
     (void)widget;
     (void)user_data;
-    debug_log("Shutdown button clicked");
     shutdown();
 }
 
@@ -67,23 +64,26 @@ void kmain(struct BootInfo *info) {
     Widget *info_panel, *info_bg, *lbl_info_title, *lbl_res, *lbl_res_val, *lbl_bpp, *lbl_bpp_val;
 
     debug_init();
-    debug_log("Kernel started");
+    debug_set_level(LOG_DEBUG);  /* Show all log levels */
+    INFO("Kernel started");
 
     if (info->magic != BOOTINFO_MAGIC || info->bpp != 32) {
-        debug_log("Boot info invalid!");
+        ERROR("Boot info invalid!");
         for (;;) {
             __asm__ volatile ("hlt");
         }
     }
 
-    debug_log("Initializing framebuffer");
+    INFO("Initializing framebuffer");
     fb_init(&g_fb, info);
-    debug_log("Initializing mouse");
+    fb_enable_double_buffer(&g_fb, back_buffer);
+    INFO("Double buffering enabled");
+    INFO("Initializing mouse");
     mouse_init();
     mouse.x = g_fb.width / 2;
     mouse.y = g_fb.height / 2;
 
-    debug_log("Initializing UI");
+    INFO("Initializing UI");
     /* Initialize UI */
     ui_context_init(&ui_ctx);
 
@@ -138,6 +138,14 @@ void kmain(struct BootInfo *info) {
     lbl_bpp_val->visible = 0;
     ui_add_widget(&ui_ctx, lbl_bpp_val);
 
+    /* Initial render */
+    INFO("Performing initial render");
+    fb_clear(&g_fb, 0x1C2433);
+    ui_render(&ui_ctx, &g_fb);
+    fb_draw_rect(&g_fb, mouse.x, mouse.y, 6, 6, 0xB4D5FF);
+    fb_swap(&g_fb);
+    INFO("Initial render complete");
+
     /* Main loop */
     for (;;) {
         uint8_t prev_buttons = mouse.buttons;
@@ -155,7 +163,6 @@ void kmain(struct BootInfo *info) {
 
         /* Handle mouse events */
         if (ui_handle_mouse(&ui_ctx, &mouse, clicked)) {
-            debug_log("Mouse event handled");
             /* Update info panel visibility */
             if (info_panel) info_panel->visible = show_info;
             if (info_bg) info_bg->visible = show_info;
@@ -164,23 +171,21 @@ void kmain(struct BootInfo *info) {
             if (lbl_res_val) lbl_res_val->visible = show_info;
             if (lbl_bpp) lbl_bpp->visible = show_info;
             if (lbl_bpp_val) lbl_bpp_val->visible = show_info;
-            debug_log("Panel visibility updated");
             needs_redraw = 1;
         }
 
         if (needs_redraw) {
-            debug_log("Redrawing");
             /* Clear background */
             fb_clear(&g_fb, 0x1C2433);
             
-            debug_log("Rendering widgets");
             /* Render all widgets */
             ui_render(&ui_ctx, &g_fb);
             
-            debug_log("Drawing cursor");
             /* Draw mouse cursor */
             fb_draw_rect(&g_fb, mouse.x, mouse.y, 6, 6, 0xB4D5FF);
-            debug_log("Redraw complete");
+            
+            /* Swap buffers to display */
+            fb_swap(&g_fb);
         }
 
         for (volatile int delay = 0; delay < 10000; delay++);
