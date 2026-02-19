@@ -20,9 +20,9 @@ void debug_log(const char *msg);
 void debug_log_level(LogLevel level, const char *msg);
 
 /* Convenience macros */
-#define DEBUG(msg) debug_log_level(LOG_DEBUG, msg)
-#define INFO(msg) debug_log_level(LOG_INFO, msg)
-#define WARN(msg) debug_log_level(LOG_WARN, msg)
-#define ERROR(msg) debug_log_level(LOG_ERROR, msg)
+#define DEBUG(msg, ...) debug_log_level(LOG_DEBUG, msg)
+#define INFO(msg, ...) debug_log_level(LOG_INFO, msg)
+#define WARN(msg, ...) debug_log_level(LOG_WARN, msg)
+#define ERROR(msg, ...) debug_log_level(LOG_ERROR, msg)
 
 #endif

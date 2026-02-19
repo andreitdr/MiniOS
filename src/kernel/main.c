@@ -7,15 +7,80 @@
 #include "time.h"
 #include "ui_widget.h"
 #include "debug.h"
+#include "fat12.h"
 
 /* Global UI state */
 static Framebuffer g_fb;
 static int show_info = 0;
+static int prev_mouse_x = -1, prev_mouse_y = -1;  /* Track if mouse just entered window */
 
-/* Back buffer for double buffering - allocate at fixed address 0x200000 (2MB)
- * This is after kernel space and safe to use */
-#define BACK_BUFFER_ADDR 0x200000
-static uint32_t *back_buffer = (uint32_t *)BACK_BUFFER_ADDR;
+/* Progress bar state */
+static void draw_progress_bar(Framebuffer *fb, int progress_percent) {
+    const int bar_width = 400;
+    const int bar_height = 30;
+    const int bar_x = (fb->width - bar_width) / 2;
+    const int bar_y = (fb->height - bar_height) / 2;
+    
+    /* Draw background */
+    fb_draw_rect(fb, bar_x - 5, bar_y - 35, bar_width + 10, 60, 0x1a1a1a);
+    
+    /* Draw border */
+    fb_draw_rect(fb, bar_x - 2, bar_y, bar_width + 4, bar_height, 0x666666);
+    
+    /* Draw filled portion */
+    int fill_width = (bar_width * progress_percent) / 100;
+    if (fill_width > 0) {
+        fb_draw_rect(fb, bar_x, bar_y + 2, fill_width, bar_height - 4, 0x00AA00);
+    }
+    
+    /* Draw progress text */
+    char progress_text[32];
+    progress_text[0] = 'B';
+    progress_text[1] = 'O';
+    progress_text[2] = 'O';
+    progress_text[3] = 'T';
+    progress_text[4] = 'I';
+    progress_text[5] = 'N';
+    progress_text[6] = 'G';
+    progress_text[7] = '.';
+    progress_text[8] = '.';
+    progress_text[9] = '.';
+    progress_text[10] = ' ';
+    
+    int percent_pos = 11;
+    int temp = progress_percent;
+    int digit_count = 0;
+    int temp_copy = temp;
+    if (temp_copy == 0) digit_count = 1;
+    else {
+        while (temp_copy > 0) {
+            digit_count++;
+            temp_copy /= 10;
+        }
+    }
+    
+    temp_copy = temp;
+    for (int i = digit_count - 1; i >= 0; i--) {
+        progress_text[percent_pos + i] = '0' + (temp_copy % 10);
+        temp_copy /= 10;
+    }
+    progress_text[percent_pos + digit_count] = '%';
+    progress_text[percent_pos + digit_count + 1] = '\0';
+    
+    fb_draw_text(fb, bar_x + 20, bar_y - 30, progress_text, 0xCCCCCC);
+}
+
+static void update_progress(Framebuffer *fb, int percent) {
+    fb_clear(fb, 0x000000);
+    draw_progress_bar(fb, percent);
+}
+
+/* Simple delay function - approximate milliseconds using busy wait */
+static void delay_ms(uint32_t ms) {
+    for (uint32_t i = 0; i < ms * 100000; i++) {
+        __asm__ volatile ("nop");
+    }
+}
 
 static void clamp_mouse(MouseState *mouse, const Framebuffer *fb) {
     if (mouse->x < 0) {
@@ -76,17 +141,60 @@ void kmain(struct BootInfo *info) {
 
     INFO("Initializing framebuffer");
     fb_init(&g_fb, info);
-    fb_enable_double_buffer(&g_fb, back_buffer);
-    INFO("Double buffering enabled");
+    update_progress(&g_fb, 10);
+    delay_ms(300);
+    
     INFO("Initializing mouse");
     mouse_init();
     mouse.x = g_fb.width / 2;
     mouse.y = g_fb.height / 2;
+    update_progress(&g_fb, 20);
+    delay_ms(300);
 
     INFO("Initializing UI");
     /* Initialize UI */
     ui_context_init(&ui_ctx);
+    update_progress(&g_fb, 30);
+    delay_ms(300);
 
+    INFO("Initializing FAT12 file system");
+    update_progress(&g_fb, 40);
+    delay_ms(300);
+    fat12_init();
+    update_progress(&g_fb, 50);
+    delay_ms(200);
+    update_progress(&g_fb, 60);
+    delay_ms(300);
+    
+    /* Test: Try to read test.txt */
+    INFO("Testing file system - attempting to read test.txt");
+    FileHandle test_file;
+    static uint8_t file_buffer[4096];
+    
+    update_progress(&g_fb, 75);
+    delay_ms(300);
+    
+    if (fat12_open("test.txt", &test_file) == 0) {
+        INFO("test.txt opened successfully");
+        int bytes_read = fat12_read(&test_file, file_buffer, sizeof(file_buffer) - 1);
+        if (bytes_read > 0) {
+            INFO("Read %d bytes from test.txt", bytes_read);
+            file_buffer[bytes_read] = '\0';  /* Null terminate */
+        } else {
+            INFO("Failed to read test.txt");
+        }
+        fat12_close(&test_file);
+    } else {
+        INFO("Failed to open test.txt");
+    }
+    update_progress(&g_fb, 90);
+    delay_ms(300);
+
+    /* Boot complete, switch to normal UI */
+    update_progress(&g_fb, 100);
+    delay_ms(500);
+    fb_clear(&g_fb, 0xFFFFFF);  /* Clear progress bar and show white background */
+    
     /* Create top bar */
     top_bar = ui_create_panel(0, 0, g_fb.width, 28, 0x3B4A68);
     ui_add_widget(&ui_ctx, top_bar);
@@ -154,6 +262,20 @@ void kmain(struct BootInfo *info) {
 
         if (mouse_poll(&mouse)) {
             clamp_mouse(&mouse, &g_fb);
+            
+            /* Sync cursor to pointer position when mouse enters from edges */
+            if (prev_mouse_x != -1) {
+                int dx = mouse.x - prev_mouse_x;
+                int dy = mouse.y - prev_mouse_y;
+                /* If large jump (>50px), assume mouse re-entered and sync cursor */
+                if ((dx > 50 || dx < -50 || dy > 50 || dy < -50) || 
+                    (prev_mouse_x == 0 && mouse.x > 50) || (prev_mouse_x == g_fb.width - 1 && mouse.x < g_fb.width - 50)) {
+                    DEBUG("Cursor synchronized to mouse entry point");
+                }
+            }
+            
+            prev_mouse_x = mouse.x;
+            prev_mouse_y = mouse.y;
             needs_redraw = 1;
         }
 
@@ -183,9 +305,14 @@ void kmain(struct BootInfo *info) {
             
             /* Draw mouse cursor */
             fb_draw_rect(&g_fb, mouse.x, mouse.y, 6, 6, 0xB4D5FF);
-            
-            /* Swap buffers to display */
-            fb_swap(&g_fb);
+        }
+        
+        /* Always render at least once to show initial screen */
+        if (prev_mouse_x == -1) {
+            prev_mouse_x = 0;  /* Mark initial render done */
+            fb_clear(&g_fb, 0x1C2433);
+            ui_render(&ui_ctx, &g_fb);
+            fb_draw_rect(&g_fb, mouse.x, mouse.y, 6, 6, 0xB4D5FF);
         }
 
         for (volatile int delay = 0; delay < 10000; delay++);

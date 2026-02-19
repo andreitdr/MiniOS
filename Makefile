@@ -61,7 +61,9 @@ KERNEL_OBJS=\
 	$(BUILD_DIR)/kernel_ui.o \
 	$(BUILD_DIR)/kernel_ui_widget.o \
 	$(BUILD_DIR)/kernel_debug.o \
-	$(BUILD_DIR)/kernel_bios_thunk.o
+	$(BUILD_DIR)/kernel_bios_thunk.o \
+	$(BUILD_DIR)/kernel_fdc.o \
+	$(BUILD_DIR)/kernel_fat12.o
 
 $(BUILD_DIR)/kernel.bin: always $(KERNEL_OBJS)
 	$(LD) -m elf_i386 -T $(SRC_DIR)/kernel/linker.ld -o $(BUILD_DIR)/kernel.elf $(KERNEL_OBJS)
@@ -98,6 +100,12 @@ $(BUILD_DIR)/kernel_debug.o: $(SRC_DIR)/kernel/lib/debug.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/kernel_bios_thunk.o: $(SRC_DIR)/kernel/lib/bios_thunk.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_fdc.o: $(SRC_DIR)/kernel/lib/fdc.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_fat12.o: $(SRC_DIR)/kernel/lib/fat12.c
 	$(CC) $(CFLAGS) -c $< -o $@
 	
 #
