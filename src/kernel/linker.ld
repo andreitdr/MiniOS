@@ -5,9 +5,18 @@ SECTIONS
 {
     . = 0x0000;
 
-    .text :
+    .text.start :
     {
         *(.text.start)
+    }
+
+    .rmdata :
+    {
+        *(.rmdata)
+    }
+
+    .text :
+    {
         *(.text*)
     }
 

@@ -20,6 +20,8 @@ OS_NAME="WZY OS"
 
 .PHONY: all floppy_image kernel bootloader clean always tools_fat
 
+CFLAGS=-m32 -ffreestanding -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-builtin -Wall -Wextra -I $(SRC_DIR)/kernel/include
+
 all: floppy_image tools_fat
 
 #
@@ -47,11 +49,56 @@ $(BUILD_DIR)/bootloader.bin: always
 #
 kernel: $(BUILD_DIR)/kernel.bin
 
-$(BUILD_DIR)/kernel.bin: always
-	$(CC) -m16 -ffreestanding -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-builtin -Wall -Wextra -c $(SRC_DIR)/kernel/entry.S -o $(BUILD_DIR)/kernel_entry.o
-	$(CC) -m16 -ffreestanding -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-builtin -Wall -Wextra -c $(SRC_DIR)/kernel/main.c -o $(BUILD_DIR)/kernel_main.o
-	$(LD) -m elf_i386 -T $(SRC_DIR)/kernel/linker.ld -o $(BUILD_DIR)/kernel.elf $(BUILD_DIR)/kernel_entry.o $(BUILD_DIR)/kernel_main.o
+
+KERNEL_OBJS=\
+	$(BUILD_DIR)/kernel_entry.o \
+	$(BUILD_DIR)/kernel_main.o \
+	$(BUILD_DIR)/kernel_bootinfo.o \
+	$(BUILD_DIR)/kernel_framebuffer.o \
+	$(BUILD_DIR)/kernel_font8x8.o \
+	$(BUILD_DIR)/kernel_mouse.o \
+	$(BUILD_DIR)/kernel_time.o \
+	$(BUILD_DIR)/kernel_ui.o \
+	$(BUILD_DIR)/kernel_ui_widget.o \
+	$(BUILD_DIR)/kernel_debug.o \
+	$(BUILD_DIR)/kernel_bios_thunk.o
+
+$(BUILD_DIR)/kernel.bin: always $(KERNEL_OBJS)
+	$(LD) -m elf_i386 -T $(SRC_DIR)/kernel/linker.ld -o $(BUILD_DIR)/kernel.elf $(KERNEL_OBJS)
 	$(OBJCOPY) -O binary $(BUILD_DIR)/kernel.elf $(BUILD_DIR)/kernel.bin
+
+$(BUILD_DIR)/kernel_entry.o: $(SRC_DIR)/kernel/entry.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_main.o: $(SRC_DIR)/kernel/main.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_bootinfo.o: $(SRC_DIR)/kernel/lib/bootinfo.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_framebuffer.o: $(SRC_DIR)/kernel/lib/framebuffer.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_font8x8.o: $(SRC_DIR)/kernel/lib/font8x8.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_mouse.o: $(SRC_DIR)/kernel/lib/mouse.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_time.o: $(SRC_DIR)/kernel/lib/time.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_ui.o: $(SRC_DIR)/kernel/lib/ui.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_ui_widget.o: $(SRC_DIR)/kernel/lib/ui_widget.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_debug.o: $(SRC_DIR)/kernel/lib/debug.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_bios_thunk.o: $(SRC_DIR)/kernel/lib/bios_thunk.S
+	$(CC) $(CFLAGS) -c $< -o $@
 	
 #
 # Always
